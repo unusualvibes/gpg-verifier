@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Verify GPG signatures client-side in your browser. 100% private - your files never leave your computer.">
+    <meta name="keywords" content="GPG, PGP, signature verification, OpenPGP, client-side, privacy, security">
+    <meta name="author" content="GPG Verifier">
+
+    <!-- Security Headers -->
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'none';
+                   script-src 'self' 'wasm-unsafe-eval';
+                   style-src 'self' 'unsafe-inline';
+                   img-src 'self' data:;
+                   connect-src 'none';
+                   font-src 'self';">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta name="referrer" content="no-referrer">
+
+    <title>GPG Verifier - Client-Side Verification</title>
+    <link rel="stylesheet" href="styles.css?v=1.0.0">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header role="banner">
+            <h1>
+                <span class="icon" aria-hidden="true">🔐</span>
+                GPG Verifier
+            </h1>
+            <p class="subtitle">Verify GPG signatures entirely in your browser. All verification happens locally - no data leaves your computer.</p>
+        </header>
+
+        <!-- Main Content -->
+        <main role="main">
+            <!-- Public Key Section -->
+            <section class="input-section collapsible" data-section="public-key" aria-labelledby="public-key-heading">
+                <h2 id="public-key-heading" class="section-heading collapsible-header" tabindex="0" role="button" aria-expanded="true">
+                    <span class="step-number">1</span>
+                    GPG Public Key
+                    <span class="collapse-icon" aria-hidden="true">▼</span>
+                </h2>
+                <div class="collapsed-summary" style="display:none;" role="status"></div>
+
+                <div class="collapsible-content">
+                <!-- Inline Error for this section -->
+                <div id="key-section-error" class="inline-error" role="alert" style="display:none;"></div>
+
+                <div class="input-group">
+                    <!-- File Upload Option -->
+                    <div class="input-option">
+                        <label for="public-key" class="input-label">
+                            Upload Key File
+                            <span class="file-types">(.asc, .gpg, .txt, etc.)</span>
+                        </label>
+                        <div class="file-input-wrapper">
+                            <input
+                                type="file"
+                                id="public-key"
+                                accept=".asc,.gpg,.key,.pub,.pgp,.txt"
+                                aria-describedby="key-file-hint">
+                            <button
+                                type="button"
+                                id="clear-key"
+                                class="clear-btn"
+                                style="display:none;"
+                                aria-label="Clear public key">
+                                ✕
+                            </button>
+                        </div>
+                        <div id="key-info" class="file-info" role="status"></div>
+                    </div>
+
+                    <!-- Text Paste Option -->
+                    <div class="input-option">
+                        <label for="key-text" class="input-label">
+                            Or Paste Key Text
+                        </label>
+                        <textarea
+                            id="key-text"
+                            placeholder="-----BEGIN PGP PUBLIC KEY BLOCK-----
+...
+-----END PGP PUBLIC KEY BLOCK-----"
+                            aria-describedby="key-text-hint"
+                            rows="6"></textarea>
+                        <p id="key-text-hint" class="hint-text">
+                            Paste the entire public key including BEGIN and END markers.
+                        </p>
+                    </div>
+                </div>
+                </div>
+            </section>
+
+            <!-- Signed File Section -->
+            <section class="input-section collapsible" data-section="signed-file" aria-labelledby="signed-file-heading">
+                <h2 id="signed-file-heading" class="section-heading collapsible-header" tabindex="0" role="button" aria-expanded="true">
+                    <span class="step-number">2</span>
+                    Signed File
+                    <span class="collapse-icon" aria-hidden="true">▼</span>
+                </h2>
+                <div class="collapsed-summary" style="display:none;" role="status"></div>
+
+                <div class="collapsible-content">
+                <!-- Inline Error for this section -->
+                <div id="signed-section-error" class="inline-error" role="alert" style="display:none;"></div>
+
+                <div class="input-group">
+                    <div class="input-option">
+                        <label for="signed-file" class="input-label">
+                            Upload Signed File or Detached Signature
+                            <span class="file-types">(.asc, .sig, .sign, .gpg, etc.)</span>
+                        </label>
+                        <div class="file-input-wrapper">
+                            <input
+                                type="file"
+                                id="signed-file"
+                                aria-describedby="signed-file-hint">
+                            <button
+                                type="button"
+                                id="clear-signed"
+                                class="clear-btn"
+                                style="display:none;"
+                                aria-label="Clear signed file">
+                                ✕
+                            </button>
+                        </div>
+                        <div id="signed-info" class="file-info" role="status"></div>
+
+                        <!-- Dynamic data file input for detached signatures -->
+                        <div id="detached-data-wrapper" class="detached-data-wrapper" style="display:none;">
+                            <label for="detached-data-file" class="input-label" style="margin-top: 15px;">
+                                Now Upload the Data File to Verify
+                                <span class="file-types">(the original file that was signed)</span>
+                            </label>
+                            <div class="file-input-wrapper">
+                                <input
+                                    type="file"
+                                    id="detached-data-file"
+                                    aria-label="Upload data file to verify">
+                            </div>
+                            <div id="detached-data-info" class="file-info" role="status"></div>
+                        </div>
+                    </div>
+
+                    <div class="input-option">
+                        <label for="signed-text" class="input-label">
+                            Or Paste Signed Text
+                        </label>
+                        <textarea
+                            id="signed-text"
+                            placeholder="-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA256
+
+Your signed message here...
+-----BEGIN PGP SIGNATURE-----
+...
+-----END PGP SIGNATURE-----"
+                            aria-describedby="signed-text-hint"
+                            rows="8"></textarea>
+                        <p id="signed-text-hint" class="hint-text">
+                            Paste clearsigned text including signature block.
+                        </p>
+                    </div>
+
+
+                    <div class="format-info collapsible collapsed" role="note">
+                        <h3 class="format-heading collapsible-header" tabindex="0" role="button" aria-expanded="false">
+                            Supported Formats:
+                            <span class="collapse-icon" aria-hidden="true">▼</span>
+                        </h3>
+                        <div class="collapsible-content">
+                            <dl class="format-list">
+                                <dt>Clearsigned</dt>
+                                <dd>Text file with embedded signature<br>
+                                    <code>-----BEGIN PGP SIGNED MESSAGE-----</code></dd>
+
+                                <dt>Inline Signed</dt>
+                                <dd>Binary file with embedded signature<br>
+                                    <code>-----BEGIN PGP MESSAGE-----</code></dd>
+
+                                <dt>Detached Signature</dt>
+                                <dd>Separate signature and data files (common for checksums/ISOs)<br>
+                                    ASCII: <code>-----BEGIN PGP SIGNATURE-----</code><br>
+                                    Binary: <code>.sig</code> files (e.g., <code>file.iso.sig</code>)<br>
+                                    <em>Supports large files via streaming (OpenPGP.js v6.3.0)</em></dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+                </div>
+            </section>
+
+            <!-- Progress Indicator -->
+            <div id="progress-container" class="progress-container" style="display:none;" role="status" aria-live="polite">
+                <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                    <div id="progress-fill" class="progress-fill"></div>
+                </div>
+                <div id="progress-text" class="progress-text"></div>
+            </div>
+
+            <!-- Results -->
+            <div id="result-container" class="result-container" style="display:none;">
+                <div id="result" class="result" role="alert" aria-live="assertive"></div>
+            </div>
+
+            <!-- Checksum Verification Section (appears after successful signature verification) -->
+            <div id="checksum-container" class="checksum-container" style="display:none;">
+                <div class="checksum-section">
+                    <h3 class="checksum-title">
+                        <span class="icon" aria-hidden="true">🔍</span>
+                        Verify File Checksums
+                    </h3>
+                    <p class="checksum-intro">
+                        This file contains checksums. You can verify that your downloaded file matches the expected checksum.
+                    </p>
+
+                    <div id="checksum-list" class="checksum-list"></div>
+
+                    <div class="checksum-upload-section">
+                        <label for="checksum-file" class="input-label">
+                            Upload Files to Verify Checksum
+                            <span class="file-types">(Select one or multiple files - they'll be verified in sequence)</span>
+                        </label>
+                        <div class="file-input-wrapper">
+                            <input
+                                type="file"
+                                id="checksum-file"
+                                multiple
+                                aria-label="Upload files for checksum verification">
+                        </div>
+                        <div id="checksum-file-info" class="file-info" role="status"></div>
+
+                        <!-- Queue display -->
+                        <div id="checksum-queue" class="checksum-queue" style="display:none;"></div>
+
+                        <!-- Progress bar for checksum verification -->
+                        <div id="checksum-progress-container" class="progress-container" style="display:none; margin-top: 1rem;" role="status" aria-live="polite">
+                            <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                <div id="checksum-progress-fill" class="progress-fill"></div>
+                            </div>
+                            <div id="checksum-progress-text" class="progress-text"></div>
+                        </div>
+
+                        <!-- Stop button for checksum verification -->
+                        <button
+                            id="checksum-stop-btn"
+                            class="btn stop-btn"
+                            style="display:none; margin-top: 1rem;"
+                            aria-label="Stop checksum verification">
+                            ⏹ Stop
+                        </button>
+
+                        <div id="checksum-result" class="checksum-result" role="status"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Start Over Button at bottom -->
+            <div class="action-section" style="margin-top: var(--spacing-xl);">
+                <button
+                    type="button"
+                    id="reset-btn"
+                    class="reset-btn"
+                    aria-label="Reset all fields and start over">
+                    🔄 Start Over
+                </button>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer role="contentinfo">
+            <div class="info-section collapsible collapsed" data-section="how-it-works">
+                <h2 class="collapsible-header" tabindex="0" role="button" aria-expanded="false">
+                    How It Works
+                    <span class="collapse-icon" aria-hidden="true">▼</span>
+                </h2>
+                <div class="collapsed-summary" style="display:block;" role="status">
+                    Click to learn how to use the verifier and view security features
+                </div>
+
+                <div class="collapsible-content">
+                    <ol class="instructions-list">
+                        <li>Provide the GPG public key (upload file or paste text)</li>
+                        <li>Upload the signed file or paste signed text</li>
+                        <li>Click "Verify Signature" to verify cryptographically</li>
+                    </ol>
+
+                    <div class="tech-info">
+                        <strong>Powered by OpenPGP.js</strong> -
+                        <a href="https://openpgpjs.org/" target="_blank" rel="noopener noreferrer">
+                            Learn more about OpenPGP.js
+                        </a>
+                    </div>
+
+                    <div class="disclaimer">
+                        <h3>Important</h3>
+                        <p>
+                            Always verify key fingerprints through multiple trusted channels.
+                            Signature verification proves a file was signed by a specific key,
+                            but you must independently verify the key belongs to the expected entity.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-section collapsible collapsed" data-section="download-offline">
+                <h2 class="collapsible-header" tabindex="0" role="button" aria-expanded="false">
+                    📥 Download for Offline Use
+                    <span class="collapse-icon" aria-hidden="true">▼</span>
+                </h2>
+                <div class="collapsed-summary" style="display:block;" role="status">
+                    Download this application for air-gapped or offline verification
+                </div>
+
+                <div class="collapsible-content">
+                    <div class="download-info">
+                        <h3>Why Download?</h3>
+                        <p>
+                            This application is designed to work <strong>completely offline</strong>.
+                            Download it once and use it anywhere - even on air-gapped systems with no internet connection.
+                        </p>
+
+                        <h3>What You Get</h3>
+                        <ul class="features-list">
+                            <li><span aria-hidden="true">✓</span> Complete standalone application (no installation required)</li>
+                            <li><span aria-hidden="true">✓</span> All dependencies included (OpenPGP.js v6.3.0 vendored locally)</li>
+                            <li><span aria-hidden="true">✓</span> Works without internet connection</li>
+                        </ul>
+
+                        <h3>Quick Download (Browser Method)</h3>
+                        <ol class="instructions-list">
+                            <li><strong>Save this page:</strong> Press <kbd>Ctrl+S</kbd> (Windows/Linux) or <kbd>Cmd+S</kbd> (Mac)</li>
+                            <li><strong>Choose format:</strong> Select "Webpage, Complete" or "HTML with files"</li>
+                            <li><strong>Save location:</strong> Choose a folder on your computer</li>
+                            <li><strong>Done!</strong> Open the saved <code>index.html</code> in any browser</li>
+                        </ol>
+
+                        <h3>Download Full Package</h3>
+                        <p>
+                            <strong>Recommended:</strong> Download the ready-to-use offline package directly from this site:
+                        </p>
+                        <div class="download-buttons">
+                            <a href="gpg-verifier-offline-v1.0.0.zip"
+                               class="download-button download-button-primary"
+                               download>
+                                💾 Download Offline Package (196KB)
+                            </a>
+                        </div>
+                        <p class="download-note">
+                            <strong>What you get:</strong> Complete standalone application with all dependencies.
+                            Extract and open <code>index.html</code> - no installation required!
+                        </p>
+
+                        <h3>Using Offline</h3>
+                        <p><strong>On your computer:</strong></p>
+                        <ul class="instructions-list" style="list-style-type: disc; margin-left: 20px;">
+                            <li>Simply open <code>index.html</code> in any modern browser</li>
+                            <li>No web server required for basic use</li>
+                            <li>Works from USB drives, network shares, or local storage</li>
+                        </ul>
+
+                        <p><strong>On an air-gapped system:</strong></p>
+                        <ul class="instructions-list" style="list-style-type: disc; margin-left: 20px;">
+                            <li>Transfer the folder to a USB drive</li>
+                            <li>Copy to the air-gapped computer</li>
+                            <li>Open <code>index.html</code> directly in the browser</li>
+                            <li>No internet connection needed - everything is local</li>
+                        </ul>
+
+                        <h3>Verify Integrity</h3>
+                        <p>
+                            For maximum security, verify the package integrity:
+                        </p>
+                        <pre><code># Check OpenPGP.js integrity
+sha256sum openpgp.min.js
+
+# Compare against official release:
+# https://github.com/openpgpjs/openpgpjs/releases/tag/v6.3.0</code></pre>
+
+                        <h3>File Structure</h3>
+                        <p>The downloaded package contains:</p>
+                        <pre><code>gpg-verifier/
+├── index.html           # Main application
+├── app.js               # Application logic
+├── styles.css           # Styling
+├── openpgp.min.js       # Crypto library (local)
+├── README.md            # Documentation
+├── SECURITY.md          # Security information
+└── LICENSE              # MIT License</code></pre>
+
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Scripts -->
+    <!-- OpenPGP.js is vendored locally for maximum security -->
+    <script src="openpgp.min.js"></script>
+    <!-- SHA-256 library for large file hashing (supports files > 2GB) -->
+    <script src="sha256.min.js"></script>
+    <!-- WebAssembly-optimized SHA-256 for maximum performance (close to native speed) -->
+    <script src="hash-wasm-sha256.min.js"></script>
+    <script src="app.js?v=5.0.3"></script>
+    <script src="checksum-addon.js?v=1.0.8"></script>
+</body>
+</html>

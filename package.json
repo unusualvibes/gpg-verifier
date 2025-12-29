@@ -1,0 +1,42 @@
+{
+  "name": "gpg-verifier",
+  "version": "1.0.0",
+  "description": "Client-side GPG signature verifier with checksum verification",
+  "main": "index.html",
+  "scripts": {
+    "test": "node test/test.js && node test/e2e-tests.js",
+    "test:unit": "node test/test.js",
+    "test:e2e": "node test/e2e-tests.js",
+    "test:e2e:headed": "HEADLESS=false node test/e2e-tests.js",
+    "start": "python3 -m http.server 8000",
+    "package": "./create-package.sh"
+  },
+  "keywords": [
+    "gpg",
+    "pgp",
+    "signature",
+    "verification",
+    "openpgp",
+    "cryptography",
+    "security",
+    "checksum",
+    "sha256",
+    "client-side"
+  ],
+  "author": "GPG Verifier Contributors",
+  "license": "MIT",
+  "devDependencies": {
+    "playwright": "^1.40.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anthropics/gpg-verifier"
+  },
+  "bugs": {
+    "url": "https://github.com/anthropics/gpg-verifier/issues"
+  },
+  "homepage": "https://github.com/anthropics/gpg-verifier#readme"
+}
