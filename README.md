@@ -97,11 +97,9 @@ gpg --armor --export your-email@example.com > pubkey.asc
 ## Documentation
 
 - **[QUICKSTART.md](QUICKSTART.md)** - Quick start guide
-- **[EXAMPLES.md](EXAMPLES.md)** - Usage examples
 - **[SECURITY.md](SECURITY.md)** - Security details
 - **[TESTING.md](TESTING.md)** - Test suite
 - **[GITHUB_PAGES.md](GITHUB_PAGES.md)** - Deployment guide
-- **[CHECKSUM_VERIFICATION.md](CHECKSUM_VERIFICATION.md)** - Checksum feature guide
 
 ## Browser Compatibility
 
