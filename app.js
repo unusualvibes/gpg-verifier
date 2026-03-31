@@ -81,6 +81,12 @@
         // Action & Results
         verifyBtn: document.getElementById('verify-btn'),
         resetBtn: document.getElementById('reset-btn'),
+        themeToggle: document.getElementById('theme-toggle'),
+        themeToggleIcon: document.getElementById('theme-toggle-icon'),
+        themeToggleLabel: document.getElementById('theme-toggle-label'),
+        appStatus: document.getElementById('app-status'),
+        appStatusBadge: document.getElementById('app-status-badge'),
+        appStatusDetail: document.getElementById('app-status-detail'),
         resultContainer: document.getElementById('result-container'),
         result: document.getElementById('result'),
 
@@ -128,6 +134,20 @@
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const day = String(date.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
+    }
+
+    /**
+     * Escapes HTML special characters before rendering untrusted text
+     * @param {string} value - The value to escape
+     * @returns {string} Safe HTML string
+     */
+    function escapeHTML(value) {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 
     /**
@@ -304,7 +324,7 @@
      */
     function showFileInfo(element, name, size) {
         const sizeStr = typeof size === 'number' ? formatBytes(size) : size;
-        element.innerHTML = `✓ ${name} (${sizeStr})`;
+        element.textContent = `✓ ${name} (${sizeStr})`;
         element.classList.add('show');
     }
 
@@ -314,7 +334,7 @@
      */
     function hideFileInfo(element) {
         element.classList.remove('show');
-        element.innerHTML = '';
+        element.textContent = '';
     }
 
     /**
@@ -340,6 +360,65 @@
     }
 
     /**
+     * Updates the persistent status panel
+     * @param {string} badge - Short badge label
+     * @param {string} detail - Longer detail text
+     */
+    function updateStatus(badge, detail) {
+        if (!elements.appStatusBadge || !elements.appStatusDetail) return;
+        elements.appStatusBadge.textContent = badge;
+        elements.appStatusDetail.textContent = detail;
+    }
+
+    /**
+     * Applies the selected theme to the document root
+     * @param {string} theme - "dark" or "light"
+     */
+    function setTheme(theme) {
+        const nextTheme = theme === 'light' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', nextTheme);
+        document.documentElement.style.colorScheme = nextTheme;
+
+        if (elements.themeToggle && elements.themeToggleIcon && elements.themeToggleLabel) {
+            const isDark = nextTheme === 'dark';
+            elements.themeToggle.setAttribute('aria-pressed', String(isDark));
+            elements.themeToggle.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+            elements.themeToggleIcon.textContent = isDark ? '☀' : '☾';
+            elements.themeToggleLabel.textContent = isDark ? 'Light Mode' : 'Dark Mode';
+        }
+
+        try {
+            localStorage.setItem('gpg-verifier-theme', nextTheme);
+        } catch (error) {
+            console.warn('Unable to persist theme preference:', error);
+        }
+    }
+
+    /**
+     * Loads the persisted theme preference, defaulting to light
+     * @returns {string} The theme that was applied
+     */
+    function loadThemePreference() {
+        let storedTheme = 'light';
+        try {
+            storedTheme = localStorage.getItem('gpg-verifier-theme') || 'light';
+        } catch (error) {
+            console.warn('Unable to read theme preference:', error);
+        }
+
+        setTheme(storedTheme);
+        return storedTheme;
+    }
+
+    /**
+     * Toggles between dark and light themes
+     */
+    function toggleTheme() {
+        const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+        setTheme(currentTheme === 'dark' ? 'light' : 'dark');
+    }
+
+    /**
      * Shows success result
      * @param {object} keyInfo - Verified key information
      */
@@ -349,26 +428,27 @@
             <div class="result-icon">✓</div>
             <div class="result-title">SIGNATURE VALID</div>
             <div class="result-details">
-                <strong>Verified Details:</strong>
+                <strong>Mathematical verification succeeded.</strong>
                 <dl class="result-info">
                     <dt>Signature Type:</dt>
-                    <dd>${keyInfo.signatureType}</dd>
+                    <dd>${escapeHTML(keyInfo.signatureType)}</dd>
 
                     <dt>Signer:</dt>
-                    <dd>${keyInfo.userID}</dd>
+                    <dd>${escapeHTML(keyInfo.userID)}</dd>
 
                     <dt>Fingerprint:</dt>
-                    <dd><code>${keyInfo.fingerprint}</code></dd>
+                    <dd><code>${escapeHTML(keyInfo.fingerprint)}</code></dd>
 
                     <dt>Key Created:</dt>
-                    <dd>${keyInfo.created}</dd>
+                    <dd>${escapeHTML(keyInfo.created)}</dd>
                 </dl>
             </div>
             <div class="result-message">
-                The file's signature is cryptographically valid and was signed by this key.
+                The signature matches this key. You still need to confirm the fingerprint belongs to the publisher you expect.
             </div>
         `;
         elements.resultContainer.style.display = 'block';
+        updateStatus('Verified', 'The signature is valid for the supplied key. Confirm the fingerprint through a trusted channel before trusting the publisher identity.');
 
         // Check for checksums in verified data
         if (verifiedData && window.ChecksumVerifier) {
@@ -392,10 +472,11 @@
                     <li>The signature doesn't match this file</li>
                     <li>The wrong public key was provided</li>
                 </ul>
-                ${errorMessage ? `<div class="error-detail">Error: ${errorMessage}</div>` : ''}
+                ${errorMessage ? `<div class="error-detail">Error: ${escapeHTML(errorMessage)}</div>` : ''}
             </div>
         `;
         elements.resultContainer.style.display = 'block';
+        updateStatus('Invalid', 'Signature verification failed. Recheck the key, signed content, and detached data file before retrying.');
     }
 
     /**
@@ -408,11 +489,12 @@
             <div class="result-icon">⚠</div>
             <div class="result-title">ERROR</div>
             <div class="result-details">
-                ${message}
+                ${escapeHTML(message)}
             </div>
         `;
         elements.resultContainer.style.display = 'block';
         hideProgress();
+        updateStatus('Error', message);
     }
 
     /**
@@ -432,6 +514,10 @@
 
         // Scroll to the error
         errorElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        const sectionHeader = errorElement.closest('.collapsible')?.querySelector('.collapsible-header');
+        if (sectionHeader) {
+            sectionHeader.focus();
+        }
     }
 
     /**
@@ -473,6 +559,7 @@
         // Only auto-verify if we have everything needed and not already verifying
         if (hasPublicKey && hasAnyData && !state.isVerifying) {
             console.log('Auto-verifying signature...');
+            updateStatus('Verifying', 'Inputs are ready. Signature verification will start automatically.');
             // Wait for collapse animation to complete (0.5s) plus small buffer
             setTimeout(() => {
                 verifySignature();
@@ -622,6 +709,7 @@
                         ? getKeySummary(keyObjects[0])
                         : `Loaded ${keyObjects.length} keys: ${keyObjects.map(k => getKeySummary(k)).join(' | ')}`;
                     collapseSection(elements.publicKeySection, summaryText);
+                    updateStatus('Waiting', 'Public key loaded. Add signed content to start automatic verification.');
 
                     // Re-check detached signature if one was already loaded
                     await recheckDetachedSignature();
@@ -673,6 +761,7 @@
                             ? getKeySummary(state.publicKeyObjects[0])
                             : `Loaded ${state.publicKeyObjects.length} keys: ${state.publicKeyObjects.map(k => getKeySummary(k)).join(' | ')}`;
                         collapseSection(elements.publicKeySection, summaryText);
+                        updateStatus('Waiting', 'Public key loaded. Add signed content to start automatic verification.');
 
                         // Re-check detached signature if one was already loaded
                         await recheckDetachedSignature();
@@ -749,6 +838,7 @@
                     ? getKeySummary(state.publicKeyObjects[0])
                     : `Pasted ${state.publicKeyObjects.length} keys: ${state.publicKeyObjects.map(k => getKeySummary(k)).join(' | ')}`;
                 collapseSection(elements.publicKeySection, summaryText);
+                updateStatus('Waiting', 'Public key loaded. Add signed content to start automatic verification.');
 
                 // Re-check detached signature if one was already loaded
                 await recheckDetachedSignature();
@@ -799,7 +889,7 @@
             const signatureFormat = isBinarySignature ? 'binary detached signature' : 'detached signature';
 
             // Update the display
-            showFileInfo(elements.signedInfo, `${state.detachedSignature.name} (${signatureFormat})`, `${summary}<br>${statusText}`);
+            showFileInfo(elements.signedInfo, `${state.detachedSignature.name} (${signatureFormat})`, `${summary}\n${statusText}`);
             console.log(`Detached signature re-checked: ${summary}, matches key: ${matchesKey}`);
         } catch (error) {
             console.warn('Could not re-check detached signature:', error);
@@ -819,6 +909,7 @@
         elements.clearKeyBtn.style.display = 'none';
         elements.resultContainer.style.display = 'none';
         updateVerifyButton();
+        updateStatus('Ready', 'Load a public key and a signed file. Verification will start automatically when both inputs are ready.');
     }
 
     // ============================================================================
@@ -902,7 +993,7 @@
                     const { summary, matchesKey } = await getSignatureSummary(signature);
                     const statusText = matchesKey ? '✓ Matches loaded key' : '⚠ Key not yet loaded';
 
-                    showFileInfo(elements.signedInfo, `${file.name} (${signatureFormat})`, `${summary}<br>${statusText}`);
+                    showFileInfo(elements.signedInfo, `${file.name} (${signatureFormat})`, `${summary}\n${statusText}`);
                     console.log(`Detached signature: ${summary}, matches key: ${matchesKey}`);
                 } catch (parseError) {
                     console.warn('Could not parse signature for preview:', parseError);
@@ -917,6 +1008,7 @@
 
                 updateVerifyButton();
                 console.log(`Detected ${signatureFormat}, prompting for data file`);
+                updateStatus('Waiting', 'Detached signature loaded. Add the original data file to start verification.');
             } else {
                 // Check if this is a valid signed file (clearsigned or inline signed)
                 const hasValidSignature = preview.includes('-----BEGIN PGP SIGNED MESSAGE-----') ||
@@ -1035,6 +1127,7 @@
 
             // Auto-verify if we have all required data
             autoVerify();
+            updateStatus('Waiting', 'Signed text loaded. Add a public key or wait for automatic verification if the key is already loaded.');
         } else {
             state.signedText = null;
             hideFileInfo(elements.signedInfo);
@@ -1056,8 +1149,6 @@
 
         // Update the info display
         if (state.detachedSignature && state.dataFile) {
-            const sigSize = formatBytes(state.detachedSignature.size);
-            const dataSize = formatBytes(state.dataFile.size);
             showFileInfo(
                 elements.detachedDataInfo,
                 `${file.name} (${formatBytes(file.size)})`,
@@ -1086,12 +1177,14 @@
                 const { summary, matchesKey } = await getSignatureSummary(signature);
                 const summaryText = `${summary} + ${state.dataFile.name}`;
                 collapseSection(elements.signedFileSection, summaryText);
+                updateStatus('Verifying', 'Detached signature and data file loaded. Verification will start automatically.');
 
                 console.log('Both detached signature and data file loaded');
             } catch (error) {
                 console.warn('Could not parse signature for summary:', error);
                 const summaryText = `${state.detachedSignature.name} + ${state.dataFile.name}`;
                 collapseSection(elements.signedFileSection, summaryText);
+                updateStatus('Verifying', 'Detached signature and data file loaded. Verification will start automatically.');
             }
 
             // Auto-verify if we have all required data
@@ -1119,6 +1212,7 @@
         elements.clearSignedBtn.style.display = 'none';
         elements.resultContainer.style.display = 'none';
         updateVerifyButton();
+        updateStatus('Ready', 'Load a public key and a signed file. Verification will start automatically when both inputs are ready.');
     }
 
     /**
@@ -1137,6 +1231,7 @@
         // Disable the button to prevent multiple clicks during abort
         elements.resetBtn.disabled = true;
         elements.resetBtn.textContent = '⏹ Stopping...';
+        updateStatus('Stopping', 'Verification is stopping. Your current inputs will be preserved.');
 
         console.log('Verification will stop at next checkpoint - inputs preserved');
     }
@@ -1182,6 +1277,7 @@
             elements.verifyBtn.disabled = false;
         }
         hideProgress();
+        updateStatus('Ready', 'Load a public key and a signed file. Verification will start automatically when both inputs are ready.');
 
         // Scroll to top
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1222,6 +1318,7 @@
         if (elements.verifyBtn) {
             elements.verifyBtn.disabled = true;
         }
+        updateStatus('Verifying', 'Checking the signature against the supplied public key.');
 
         // Change reset button to "Stop" button
         elements.resetBtn.textContent = '⏹ Stop';
@@ -1509,21 +1606,29 @@
 
             // Stage 5: Check result
             showProgress(PROGRESS_STAGES.CHECK.percent, PROGRESS_STAGES.CHECK.text);
-            const { verified } = verificationResult.signatures[0];
-
             // Stage 6: Complete
             showProgress(PROGRESS_STAGES.COMPLETE.percent, PROGRESS_STAGES.COMPLETE.text);
 
             try {
-                await verified;
+                for (const signatureEntry of verificationResult.signatures) {
+                    await signatureEntry.verified;
+                }
 
-                // Find which key was used for signing
-                const { keyID } = verificationResult.signatures[0];
+                // Find which key was used for signing without falling back to an unrelated loaded key
+                const primarySignature = verificationResult.signatures[0];
+                const { keyID } = primarySignature;
                 const signingKey = verificationKeys.find(k => {
                     return k.getKeyIDs().some(id => id.equals(keyID));
-                }) || verificationKeys[0];
+                });
 
-                const keyInfo = formatKeyInfo(signingKey, signatureType);
+                const keyInfo = signingKey
+                    ? formatKeyInfo(signingKey, signatureType)
+                    : {
+                        userID: `Key ID ${keyID ? keyID.toHex().toUpperCase() : 'Unknown'}`,
+                        fingerprint: 'Unavailable',
+                        created: 'Unknown',
+                        signatureType: signatureType === 'detached' ? 'Detached Signature' : signatureType
+                    };
 
                 // Extract verified data for checksum detection
                 let verifiedData = verifiedDataContent; // Use detached signature data if available
@@ -1564,13 +1669,9 @@
                 hideProgress();
                 // Hide any old results but keep inputs
                 elements.resultContainer.style.display = 'none';
+                updateStatus('Stopped', 'Verification stopped. Inputs are still loaded and can be retried.');
             } else {
-                // Check if error has custom HTML message (e.g., file too large error)
-                if (error.htmlMessage) {
-                    showError(error.htmlMessage);
-                } else {
-                    showError(`Error verifying signed message: ${error.message || 'An error occurred during verification'}`);
-                }
+                showError(`Error verifying signed message: ${error.message || 'An error occurred during verification'}`);
             }
         } finally {
             // Check abort status before resetting
@@ -1643,6 +1744,9 @@
             elements.verifyBtn.addEventListener('click', verifySignature);
         }
         elements.resetBtn.addEventListener('click', resetAll);
+        if (elements.themeToggle) {
+            elements.themeToggle.addEventListener('click', toggleTheme);
+        }
     }
 
     // ============================================================================
@@ -1650,12 +1754,14 @@
     // ============================================================================
 
     function initialize() {
+        loadThemePreference();
+
         // Check if OpenPGP.js loaded successfully
         if (typeof openpgp === 'undefined') {
             showError(
                 'OpenPGP.js library failed to load.\n\n' +
-                'Please check your internet connection and refresh the page.\n\n' +
-                'For offline use, download and self-host the OpenPGP.js library (see README.md).'
+                'Refresh the page or confirm the local application bundle is complete.\n\n' +
+                'This verifier is designed to run fully offline once its local files are present.'
             );
             return;
         }

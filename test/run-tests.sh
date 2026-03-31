@@ -22,11 +22,14 @@ if ! command -v node &> /dev/null; then
     exit 1
 fi
 
-echo "Running automated test suite..."
+echo "Running structural tests..."
 echo ""
+node test/test.js
 
-# Run the test suite
-node test.js
+echo ""
+echo "Running end-to-end tests..."
+echo ""
+node test/e2e-tests.js
 
 exit_code=$?
 
@@ -34,9 +37,7 @@ echo ""
 if [ $exit_code -eq 0 ]; then
     echo -e "${GREEN}✓ All tests passed!${NC}"
 else
-    echo -e "${YELLOW}Some tests had issues (this is OK if only OpenPGP.js loading failed)${NC}"
-    echo -e "${YELLOW}The OpenPGP.js library is designed for browsers, not Node.js${NC}"
-    echo -e "${YELLOW}As long as file structure and web server tests pass, the app works!${NC}"
+    echo -e "${YELLOW}One or more test suites failed.${NC}"
 fi
 
 echo ""

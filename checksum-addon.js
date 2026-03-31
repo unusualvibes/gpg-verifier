@@ -36,20 +36,39 @@
         currentFile: null
     };
 
+    const SHA256_HEX_LENGTH = 64;
+
+    /**
+     * Escapes HTML special characters before rendering untrusted text
+     * @param {string} value - The value to escape
+     * @returns {string} Safe HTML string
+     */
+    function escapeHTML(value) {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     /**
      * Detects if content contains checksum lines
      * @param {string} content - Content to check
      * @returns {boolean} True if checksums detected
      */
     function containsChecksums(content) {
-        // Match multiple checksum formats:
-        // Format 1: hash  filename (standard)
-        const standardPattern = /^([0-9a-f]{32,128})\s+([^\s].+)$/gm;
+        // SHA-256 standard format: hash  filename
+        const standardPattern = /^([0-9a-f]{64})\s+([^\s].+)$/gim;
         if (standardPattern.test(content)) return true;
 
-        // Format 2: SHA256 (filename) = hash (BSD/Fedora style)
-        const bsdPattern = /^(?:SHA256|SHA512|SHA1|MD5)\s*\([^)]+\)\s*=\s*([0-9a-f]{32,128})/gim;
+        // BSD/Fedora SHA-256 format: SHA256 (filename) = hash
+        const bsdPattern = /^SHA256\s*\([^)]+\)\s*=\s*([0-9a-f]{64})/gim;
         if (bsdPattern.test(content)) return true;
+
+        // Colon format: filename: hash
+        const colonPattern = /^(.+?):\s*([0-9a-f]{64})$/gim;
+        if (colonPattern.test(content)) return true;
 
         return false;
     }
@@ -70,7 +89,7 @@
             // Try multiple formats:
 
             // Format 1: Standard format (hash  filename) or (hash *filename for binary)
-            let match = trimmed.match(/^([0-9a-f]{32,128})\s+[\*\s]?(.+)$/i);
+            let match = trimmed.match(/^([0-9a-f]{64})\s+[\*\s]?(.+)$/i);
             if (match) {
                 const hash = match[1].toLowerCase();
                 let filename = match[2].trim();
@@ -81,7 +100,7 @@
             }
 
             // Format 2: BSD/Fedora format (SHA256 (filename) = hash)
-            match = trimmed.match(/^(?:SHA256|SHA512|SHA1|MD5)\s*\(([^)]+)\)\s*=\s*([0-9a-f]{32,128})/i);
+            match = trimmed.match(/^SHA256\s*\(([^)]+)\)\s*=\s*([0-9a-f]{64})/i);
             if (match) {
                 let filename = match[1].trim();
                 const hash = match[2].toLowerCase();
@@ -92,10 +111,20 @@
             }
 
             // Format 3: hash = filename format
-            match = trimmed.match(/^([0-9a-f]{32,128})\s*=\s*(.+)$/i);
+            match = trimmed.match(/^([0-9a-f]{64})\s*=\s*(.+)$/i);
             if (match) {
                 const hash = match[1].toLowerCase();
                 let filename = match[2].trim();
+                filename = filename.split(/[\/\\]/).pop();
+                checksums[filename] = hash;
+                continue;
+            }
+
+            // Format 4: filename: hash format
+            match = trimmed.match(/^(.+?):\s*([0-9a-f]{64})$/i);
+            if (match) {
+                let filename = match[1].trim();
+                const hash = match[2].toLowerCase();
                 filename = filename.split(/[\/\\]/).pop();
                 checksums[filename] = hash;
             }
@@ -110,13 +139,7 @@
      * @returns {string} Algorithm name
      */
     function getHashAlgorithm(hash) {
-        switch (hash.length) {
-            case 32: return 'MD5';
-            case 40: return 'SHA-1';
-            case 64: return 'SHA-256';
-            case 128: return 'SHA-512';
-            default: return 'Unknown';
-        }
+        return hash && hash.length === SHA256_HEX_LENGTH ? 'SHA-256' : 'Unsupported';
     }
 
     /**
@@ -442,7 +465,7 @@
         let html = `
             <div class="checksum-info">
                 <p><strong>Found ${count} checksum(s) in this file:</strong></p>
-                <p class="checksum-algorithm">Algorithm: ${algorithm}</p>
+                <p class="checksum-algorithm">Algorithm: ${escapeHTML(algorithm)}</p>
                 ${verifiedCount > 0 ? `<p class="checksum-verified-count">✓ ${verifiedCount} of ${count} verified</p>` : ''}
                 <ul class="checksum-items">
         `;
@@ -454,8 +477,8 @@
 
             html += `
                 <li class="checksum-item${verifiedClass}">
-                    ${verifiedIcon}<span class="checksum-filename">${filename}</span>
-                    <code class="checksum-hash">${hash}</code>
+                    ${verifiedIcon}<span class="checksum-filename">${escapeHTML(filename)}</span>
+                    <code class="checksum-hash">${escapeHTML(hash)}</code>
                 </li>
             `;
         }
@@ -513,8 +536,8 @@
             html += `
                 <div class="checksum-queue-item ${item.status}" id="queue-item-${index}">
                     <span class="checksum-queue-status">${statusIcon}</span>
-                    <span class="checksum-queue-filename">${item.file.name}</span>
-                    <span class="checksum-queue-size">${formatFileSize(item.file.size)}</span>
+                    <span class="checksum-queue-filename">${escapeHTML(item.file.name)}</span>
+                    <span class="checksum-queue-size">${escapeHTML(formatFileSize(item.file.size))}</span>
                 </div>
             `;
         });
@@ -716,13 +739,13 @@
                         <p><strong>File integrity confirmed!</strong></p>
                         <dl class="checksum-result-info">
                             <dt>Expected filename:</dt>
-                            <dd>${matchedFilename}</dd>
+                            <dd>${escapeHTML(matchedFilename)}</dd>
 
                             <dt>Algorithm:</dt>
-                            <dd>${getHashAlgorithm(expectedHash)}</dd>
+                            <dd>${escapeHTML(getHashAlgorithm(expectedHash))}</dd>
 
                             <dt>Checksum:</dt>
-                            <dd><code>${calculatedHash}</code></dd>
+                            <dd><code>${escapeHTML(calculatedHash)}</code></dd>
                         </dl>
                         <p class="checksum-result-message">
                             ✅ The file has not been corrupted or tampered with.
@@ -739,10 +762,10 @@
                         <p><strong>⚠️ Warning: File integrity check failed!</strong></p>
                         <dl class="checksum-result-info">
                             <dt>Expected checksum:</dt>
-                            <dd><code>${expectedHash}</code></dd>
+                            <dd><code>${escapeHTML(expectedHash)}</code></dd>
 
                             <dt>Actual checksum:</dt>
-                            <dd><code>${calculatedHash}</code></dd>
+                            <dd><code>${escapeHTML(calculatedHash)}</code></dd>
                         </dl>
                         <div class="checksum-warning">
                             <p>⚠️ <strong>Do not use this file!</strong> This may indicate:</p>
@@ -763,7 +786,7 @@
                     <div class="checksum-result-title">FILENAME MISMATCH</div>
                     <div class="checksum-result-details">
                         <p><strong>⚠️ Warning: The filename does not match!</strong></p>
-                        <p>The file "<strong>${file.name}</strong>" is not listed in the verified checksum file.</p>
+                        <p>The file "<strong>${escapeHTML(file.name)}</strong>" is not listed in the verified checksum file.</p>
                         <div class="checksum-warning">
                             <p><strong>This is a problem because:</strong></p>
                             <ul>
@@ -780,13 +803,13 @@
                         </div>
                         <details class="checksum-details">
                             <summary>Show technical details</summary>
-                            <p><strong>Calculated ${getHashAlgorithm(Object.values(parsedChecksums)[0])}:</strong></p>
-                            <code class="checksum-hash">${calculatedHash}</code>
+                            <p><strong>Calculated ${escapeHTML(getHashAlgorithm(Object.values(parsedChecksums)[0]))}:</strong></p>
+                            <code class="checksum-hash">${escapeHTML(calculatedHash)}</code>
                             <p class="checksum-hint">
                                 <strong>Available files in this checksum list:</strong>
                             </p>
                             <ul>
-                                ${Object.keys(parsedChecksums).map(f => `<li><code>${f}</code></li>`).join('')}
+                                ${Object.keys(parsedChecksums).map(f => `<li><code>${escapeHTML(f)}</code></li>`).join('')}
                             </ul>
                         </details>
                     </div>
@@ -807,7 +830,7 @@
                     <div class="checksum-result-icon">⚠</div>
                     <div class="checksum-result-title">ERROR</div>
                     <div class="checksum-result-details">
-                        Failed to calculate checksum: ${error.message}
+                        Failed to calculate checksum: ${escapeHTML(error.message)}
                     </div>
                 `;
                 checksumElements.result.style.display = 'block';

@@ -33,9 +33,8 @@ Validates core functionality:
 
 Tests full browser workflows using Playwright:
 - GPG signature verification (clearsigned, detached)
-- Checksum verification (single and multiple files)
-- File queue processing
-- UI interactions (collapsible sections, progress bars)
+- Checksum verification
+- UI interactions (collapsible sections, theme toggle, stop/reset flows)
 - Error handling
 - Accessibility (keyboard navigation, mobile viewport)
 
@@ -120,11 +119,10 @@ Available utilities in `test/test-helpers.js`:
 
 ## Expected Results
 
-**Unit tests:** 30-35 passing (85-100%)
-- Some tests require web server running
-- OpenPGP.js loading may fail in Node.js (this is expected)
+**Unit tests:** 43 passing
+- Includes a temporary local HTTP server for asset checks
 
-**E2E tests:** 18+ passing (100%)
+**E2E tests:** 35 passing
 - Requires Playwright installation
 - Tests run in real browser environment
 
@@ -132,19 +130,15 @@ Available utilities in `test/test-helpers.js`:
 
 | Test Suite | Tests | Coverage |
 |------------|-------|----------|
-| Unit Tests | 35+ | Core functionality |
-| E2E Tests | 18+ | Full workflows |
-| **Total** | **57+** | **Comprehensive** |
+| Unit Tests | 43 | Structural checks and local server coverage |
+| E2E Tests | 35 | Browser workflows and regression coverage |
+| **Total** | **78** | Current automated coverage |
 
 ## Troubleshooting
 
 **Tests won't run:**
 - Install Node.js 18+ (`node --version`)
 - Run from project root directory
-
-**Web server tests fail:**
-- Start server: `python3 -m http.server 8000`
-- Re-run tests
 
 **E2E tests fail:**
 - Install Playwright: `npx playwright install chromium`
@@ -156,10 +150,8 @@ Available utilities in `test/test-helpers.js`:
 
 ## Browser Compatibility
 
-Tests verify compatibility with:
-- Chrome/Edge 90+
-- Firefox 88+
-- Safari 14+
+Automated tests currently run against Chromium via Playwright.
+Firefox and Safari still require manual verification.
 
 ## Continuous Testing
 
