@@ -474,6 +474,103 @@ async function testStopButtonPreservesInputs(page, url) {
     await page.unroute('**/app.js*', appRoute);
 }
 
+async function testKnownKeyBanner(page, url) {
+    printSection('Known Key Banner');
+
+    await gotoApp(page, url);
+
+    // Read the test key so we can put it in the mock KnownKeys database
+    const testKeyArmored = fs.readFileSync(path.join(FIXTURES, 'public-key.asc'), 'utf8');
+
+    // Inject a KnownKeys database that maps the test key's ID to a mock entry.
+    // Key ID is the last 16 hex chars of fingerprint 9591F6C004F01D8D48C1CDC02672E6587FB0A5A2
+    await page.evaluate((armoredKey) => {
+        window.KnownKeys = {
+            lookup: function(keyID) {
+                if (keyID === '2672e6587fb0a5a2') {
+                    return {
+                        distro: 'TestDistro',
+                        label: 'TestDistro Release Key',
+                        fingerprint: '9591F6C004F01D8D48C1CDC02672E6587FB0A5A2',
+                        armoredKey: armoredKey
+                    };
+                }
+                return null;
+            }
+        };
+    }, testKeyArmored);
+
+    // Upload the clearsigned test file (signed with the test key)
+    const signedFilePath = path.join(FIXTURES, 'message.txt.asc');
+    await page.locator('#signed-file').setInputFiles(signedFilePath);
+
+    // Banner should appear in the public key section
+    const banner = page.locator('#known-key-banner');
+    await banner.waitFor({ state: 'visible', timeout: 3000 });
+    await assert(await banner.isVisible(), 'Known key banner appears after uploading file signed with a known key');
+
+    const bannerText = await banner.textContent();
+    await assert(bannerText.includes('TestDistro Release Key'), 'Banner shows the key label');
+    await assert(bannerText.includes('9591F6C004'), 'Banner shows partial fingerprint');
+
+    // Click "Use this key" — should load the key, collapse sections, and verify
+    await page.locator('#known-key-accept').click();
+
+    // Banner should disappear
+    await banner.waitFor({ state: 'detached', timeout: 3000 });
+    await assert(!(await page.locator('#known-key-banner').isVisible().catch(() => false)), 'Banner disappears after accepting');
+
+    // Verification should succeed
+    const result = page.locator('#result');
+    await result.waitFor({ state: 'visible', timeout: 5000 });
+    const resultText = await result.textContent();
+    await assert(resultText.includes('SIGNATURE VALID'), 'Verification succeeds after loading known key via banner');
+
+    // --- Negative test: unknown key shows no banner ---
+    await gotoApp(page, url);
+
+    // Empty KnownKeys database — no matches
+    await page.evaluate(() => {
+        window.KnownKeys = { lookup: function() { return null; } };
+    });
+
+    await page.locator('#signed-file').setInputFiles(signedFilePath);
+    await page.waitForTimeout(500);
+
+    const bannerAfterUnknown = await page.locator('#known-key-banner').isVisible().catch(() => false);
+    await assert(!bannerAfterUnknown, 'No banner appears for a file signed with an unknown key');
+
+    // --- Dismiss test: clicking dismiss hides banner and leaves key section empty ---
+    await gotoApp(page, url);
+
+    await page.evaluate((armoredKey) => {
+        window.KnownKeys = {
+            lookup: function(keyID) {
+                if (keyID === '2672e6587fb0a5a2') {
+                    return {
+                        distro: 'TestDistro', label: 'TestDistro Release Key',
+                        fingerprint: '9591F6C004F01D8D48C1CDC02672E6587FB0A5A2',
+                        armoredKey: armoredKey
+                    };
+                }
+                return null;
+            }
+        };
+    }, testKeyArmored);
+
+    await page.locator('#signed-file').setInputFiles(signedFilePath);
+    await page.locator('#known-key-banner').waitFor({ state: 'visible', timeout: 3000 });
+    await page.locator('#known-key-dismiss').click();
+
+    await page.locator('#known-key-banner').waitFor({ state: 'detached', timeout: 2000 });
+    const dismissedBannerGone = !(await page.locator('#known-key-banner').isVisible().catch(() => false));
+    await assert(dismissedBannerGone, 'Banner disappears after clicking dismiss');
+
+    const keyTextValue = await page.locator('#key-text').inputValue();
+    const keyFileValue = await page.locator('#public-key').evaluate(el => el.value);
+    await assert(!keyTextValue && !keyFileValue, 'Dismissing banner leaves public key section empty');
+}
+
 async function testResetAndResponsiveLayout(page, url) {
     printSection('Reset And Layout');
 
@@ -525,6 +622,7 @@ async function runTests() {
         await testInvalidInputsAndSignatureRejection(page, url);
         await testPasteKeyViaTextarea(page, url);
         await testStopButtonPreservesInputs(page, url);
+        await testKnownKeyBanner(page, url);
         await testResetAndResponsiveLayout(page, url);
 
         const expectedErrorFragments = [
