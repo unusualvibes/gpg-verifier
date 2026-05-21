@@ -1094,7 +1094,8 @@
                 const summaryText = `Signed file: ${file.name} (${formatBytes(file.size)})`;
                 collapseSection(elements.signedFileSection, summaryText);
 
-                // Known key lookup for clearsigned file
+                // Known key lookup for clearsigned files only (inline-signed PGP MESSAGE format is rare
+                // for distro releases and skipped here to keep parse overhead minimal)
                 if (window.KnownKeysAddon && !state.publicKey) {
                     try {
                         // Second read: earlier preview was only 2000 bytes, insufficient for full clearsign parse
