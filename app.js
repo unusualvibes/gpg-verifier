@@ -567,6 +567,35 @@
         }
     }
 
+    /**
+     * Loads a known distribution key into state and triggers auto-verify
+     * @param {object} match - Entry from KnownKeys database
+     */
+    async function loadKnownKey(match) {
+        try {
+            const keys = await openpgp.readKeys({ armoredKeys: match.armoredKey });
+            if (!keys || keys.length === 0) throw new Error('No keys parsed');
+            state.publicKey = match.armoredKey;
+            state.publicKeyObjects = keys;
+
+            const summaryText = keys.length === 1
+                ? getKeySummary(keys[0])
+                : `Loaded ${keys.length} keys from ${match.distro}`;
+
+            collapseSection(elements.publicKeySection, summaryText);
+            updateStatus('Waiting', `${match.label} loaded. Starting verification...`);
+
+            if (window.KnownKeysAddon) {
+                window.KnownKeysAddon.hideBanner();
+            }
+
+            elements.resultContainer.style.display = 'none';
+            autoVerify();
+        } catch (err) {
+            console.error('loadKnownKey failed:', err);
+        }
+    }
+
     // ============================================================================
     // COLLAPSIBLE SECTION HANDLERS
     // ============================================================================
@@ -906,6 +935,9 @@
         elements.keyTextArea.value = '';
         hideFileInfo(elements.keyInfo);
         hideInlineError(elements.keySectionError);
+        if (window.KnownKeysAddon) {
+            window.KnownKeysAddon.hideBanner();
+        }
         elements.clearKeyBtn.style.display = 'none';
         elements.resultContainer.style.display = 'none';
         updateVerifyButton();
@@ -995,6 +1027,29 @@
 
                     showFileInfo(elements.signedInfo, `${file.name} (${signatureFormat})`, `${summary}\n${statusText}`);
                     console.log(`Detached signature: ${summary}, matches key: ${matchesKey}`);
+
+                    // Known key lookup
+                    if (window.KnownKeysAddon && !state.publicKey) {
+                        var sigPackets = signature.packets;
+                        var signerKeyID = null;
+                        for (var i = 0; i < sigPackets.length; i++) {
+                            var pkt = sigPackets[i];
+                            if (pkt.constructor && pkt.constructor.tag === 2) {
+                                signerKeyID = pkt.issuerKeyID && pkt.issuerKeyID.toHex
+                                    ? pkt.issuerKeyID.toHex() : null;
+                                break;
+                            }
+                        }
+                        if (signerKeyID) {
+                            var knownMatch = window.KnownKeysAddon.checkAndPrompt(signerKeyID);
+                            if (knownMatch) {
+                                window.KnownKeysAddon.showBanner(knownMatch,
+                                    function() { loadKnownKey(knownMatch); },
+                                    function() {}
+                                );
+                            }
+                        }
+                    }
                 } catch (parseError) {
                     console.warn('Could not parse signature for preview:', parseError);
                     showFileInfo(elements.signedInfo, `${file.name} (${signatureFormat})`, formatBytes(file.size));
@@ -1051,6 +1106,29 @@
                 const summaryText = `Signed file: ${file.name} (${formatBytes(file.size)})`;
                 collapseSection(elements.signedFileSection, summaryText);
 
+                // Known key lookup for clearsigned file
+                if (window.KnownKeysAddon && !state.publicKey) {
+                    try {
+                        var fileText = await readFileAsText(file);
+                        var fileType = detectSignatureType(fileText);
+                        if (fileType === SIGNATURE_TYPES.CLEARSIGNED) {
+                            var parsedMsg = await openpgp.readCleartextMessage({ cleartextMessage: fileText });
+                            var fileSigPacket = parsedMsg.signature && parsedMsg.signature.packets && parsedMsg.signature.packets[0];
+                            var fileSignerKeyID = fileSigPacket && fileSigPacket.issuerKeyID && fileSigPacket.issuerKeyID.toHex
+                                ? fileSigPacket.issuerKeyID.toHex() : null;
+                            if (fileSignerKeyID) {
+                                var fileKnownMatch = window.KnownKeysAddon.checkAndPrompt(fileSignerKeyID);
+                                if (fileKnownMatch) {
+                                    window.KnownKeysAddon.showBanner(fileKnownMatch,
+                                        function() { loadKnownKey(fileKnownMatch); },
+                                        function() {}
+                                    );
+                                }
+                            }
+                        }
+                    } catch (_) { /* silently skip */ }
+                }
+
                 // Auto-verify if we have all required data
                 autoVerify();
             }
@@ -1068,7 +1146,7 @@
      * Handles signed text paste
      * @param {Event} event - Textarea input event
      */
-    function handleSignedTextPaste(event) {
+    async function handleSignedTextPaste(event) {
         const text = event.target.value.trim();
 
         // Hide any existing inline errors
@@ -1124,6 +1202,27 @@
             // Auto-collapse section after successful load
             const summaryText = `Pasted signed text (${text.length} characters)`;
             collapseSection(elements.signedFileSection, summaryText);
+
+            // Known key lookup for pasted clearsigned text
+            if (window.KnownKeysAddon && !state.publicKey) {
+                try {
+                    if (text.includes(PGP_MARKERS.SIGNED_MESSAGE)) {
+                        var parsedText = await openpgp.readCleartextMessage({ cleartextMessage: text });
+                        var textSigPacket = parsedText.signature && parsedText.signature.packets && parsedText.signature.packets[0];
+                        var textSignerKeyID = textSigPacket && textSigPacket.issuerKeyID && textSigPacket.issuerKeyID.toHex
+                            ? textSigPacket.issuerKeyID.toHex() : null;
+                        if (textSignerKeyID) {
+                            var textKnownMatch = window.KnownKeysAddon.checkAndPrompt(textSignerKeyID);
+                            if (textKnownMatch) {
+                                window.KnownKeysAddon.showBanner(textKnownMatch,
+                                    function() { loadKnownKey(textKnownMatch); },
+                                    function() {}
+                                );
+                            }
+                        }
+                    }
+                } catch (_) { /* silently skip */ }
+            }
 
             // Auto-verify if we have all required data
             autoVerify();
@@ -1209,6 +1308,9 @@
         hideFileInfo(elements.detachedDataInfo);
         elements.detachedDataWrapper.style.display = 'none';
         hideInlineError(elements.signedSectionError);
+        if (window.KnownKeysAddon) {
+            window.KnownKeysAddon.hideBanner();
+        }
         elements.clearSignedBtn.style.display = 'none';
         elements.resultContainer.style.display = 'none';
         updateVerifyButton();
