@@ -206,7 +206,7 @@
             }
 
             if (!sigPacket) {
-                return { summary: 'Unknown signature', matchesKey: false };
+                return { summary: 'Unknown signature', matchesKey: false, signerKeyID: null };
             }
 
             const signerKeyID = sigPacket.issuerKeyID?.toHex() || 'unknown';
@@ -234,10 +234,10 @@
 
             let summary = `Signature by ${signerName || 'Key ID: ' + signerKeyID} (Signed: ${dateStr})`;
 
-            return { summary, matchesKey };
+            return { summary, matchesKey, signerKeyID };
         } catch (error) {
             console.warn('Error getting signature summary:', error);
-            return { summary: 'Detached signature', matchesKey: false };
+            return { summary: 'Detached signature', matchesKey: false, signerKeyID: null };
         }
     }
 
@@ -1022,32 +1022,20 @@
                         signature = await openpgp.readSignature({ armoredSignature: sigText });
                     }
 
-                    const { summary, matchesKey } = await getSignatureSummary(signature);
+                    const { summary, matchesKey, signerKeyID: detachedSignerKeyID } = await getSignatureSummary(signature);
                     const statusText = matchesKey ? '✓ Matches loaded key' : '⚠ Key not yet loaded';
 
                     showFileInfo(elements.signedInfo, `${file.name} (${signatureFormat})`, `${summary}\n${statusText}`);
                     console.log(`Detached signature: ${summary}, matches key: ${matchesKey}`);
 
                     // Known key lookup
-                    if (window.KnownKeysAddon && !state.publicKey) {
-                        var sigPackets = signature.packets;
-                        var signerKeyID = null;
-                        for (var i = 0; i < sigPackets.length; i++) {
-                            var pkt = sigPackets[i];
-                            if (pkt.constructor && pkt.constructor.tag === 2) {
-                                signerKeyID = pkt.issuerKeyID && pkt.issuerKeyID.toHex
-                                    ? pkt.issuerKeyID.toHex() : null;
-                                break;
-                            }
-                        }
-                        if (signerKeyID) {
-                            var knownMatch = window.KnownKeysAddon.checkAndPrompt(signerKeyID);
-                            if (knownMatch) {
-                                window.KnownKeysAddon.showBanner(knownMatch,
-                                    function() { loadKnownKey(knownMatch); },
-                                    function() {}
-                                );
-                            }
+                    if (window.KnownKeysAddon && !state.publicKey && detachedSignerKeyID) {
+                        const detachedKnownMatch = window.KnownKeysAddon.checkAndPrompt(detachedSignerKeyID);
+                        if (detachedKnownMatch) {
+                            window.KnownKeysAddon.showBanner(detachedKnownMatch,
+                                () => loadKnownKey(detachedKnownMatch),
+                                () => {}
+                            );
                         }
                     }
                 } catch (parseError) {
@@ -1109,19 +1097,20 @@
                 // Known key lookup for clearsigned file
                 if (window.KnownKeysAddon && !state.publicKey) {
                     try {
-                        var fileText = await readFileAsText(file);
-                        var fileType = detectSignatureType(fileText);
+                        // Second read: earlier preview was only 2000 bytes, insufficient for full clearsign parse
+                        const fileText = await readFileAsText(file);
+                        const fileType = detectSignatureType(fileText);
                         if (fileType === SIGNATURE_TYPES.CLEARSIGNED) {
-                            var parsedMsg = await openpgp.readCleartextMessage({ cleartextMessage: fileText });
-                            var fileSigPacket = parsedMsg.signature && parsedMsg.signature.packets && parsedMsg.signature.packets[0];
-                            var fileSignerKeyID = fileSigPacket && fileSigPacket.issuerKeyID && fileSigPacket.issuerKeyID.toHex
+                            const parsedMsg = await openpgp.readCleartextMessage({ cleartextMessage: fileText });
+                            const fileSigPacket = parsedMsg.signature && parsedMsg.signature.packets && parsedMsg.signature.packets[0];
+                            const fileSignerKeyID = fileSigPacket && fileSigPacket.issuerKeyID && fileSigPacket.issuerKeyID.toHex
                                 ? fileSigPacket.issuerKeyID.toHex() : null;
                             if (fileSignerKeyID) {
-                                var fileKnownMatch = window.KnownKeysAddon.checkAndPrompt(fileSignerKeyID);
+                                const fileKnownMatch = window.KnownKeysAddon.checkAndPrompt(fileSignerKeyID);
                                 if (fileKnownMatch) {
                                     window.KnownKeysAddon.showBanner(fileKnownMatch,
-                                        function() { loadKnownKey(fileKnownMatch); },
-                                        function() {}
+                                        () => loadKnownKey(fileKnownMatch),
+                                        () => {}
                                     );
                                 }
                             }
@@ -1207,16 +1196,16 @@
             if (window.KnownKeysAddon && !state.publicKey) {
                 try {
                     if (text.includes(PGP_MARKERS.SIGNED_MESSAGE)) {
-                        var parsedText = await openpgp.readCleartextMessage({ cleartextMessage: text });
-                        var textSigPacket = parsedText.signature && parsedText.signature.packets && parsedText.signature.packets[0];
-                        var textSignerKeyID = textSigPacket && textSigPacket.issuerKeyID && textSigPacket.issuerKeyID.toHex
+                        const parsedText = await openpgp.readCleartextMessage({ cleartextMessage: text });
+                        const textSigPacket = parsedText.signature && parsedText.signature.packets && parsedText.signature.packets[0];
+                        const textSignerKeyID = textSigPacket && textSigPacket.issuerKeyID && textSigPacket.issuerKeyID.toHex
                             ? textSigPacket.issuerKeyID.toHex() : null;
                         if (textSignerKeyID) {
-                            var textKnownMatch = window.KnownKeysAddon.checkAndPrompt(textSignerKeyID);
+                            const textKnownMatch = window.KnownKeysAddon.checkAndPrompt(textSignerKeyID);
                             if (textKnownMatch) {
                                 window.KnownKeysAddon.showBanner(textKnownMatch,
-                                    function() { loadKnownKey(textKnownMatch); },
-                                    function() {}
+                                    () => loadKnownKey(textKnownMatch),
+                                    () => {}
                                 );
                             }
                         }
