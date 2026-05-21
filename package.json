@@ -9,7 +9,8 @@
     "test:e2e": "node test/e2e-tests.js",
     "test:e2e:headed": "HEADLESS=false node test/e2e-tests.js",
     "start": "python3 -m http.server 8000",
-    "package": "./create-package.sh"
+    "package": "./create-package.sh",
+    "update-keys": "node scripts/fetch-keys.js"
   },
   "keywords": [
     "gpg",
