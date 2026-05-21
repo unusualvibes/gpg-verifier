@@ -1,0 +1,37 @@
+name: Update Known Distribution Keys
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'   # Every Monday at 00:00 UTC
+  workflow_dispatch:        # Manual trigger from GitHub UI
+
+jobs:
+  update-keys:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch and update known keys
+        run: npm run update-keys
+
+      - uses: peter-evans/create-pull-request@v6
+        with:
+          title: 'chore: update known distribution keys'
+          body: |
+            Automated weekly key refresh.
+
+            **Review checklist before merging:**
+            - [ ] Check the diff in `known-keys.js` — only expected keys should change
+            - [ ] Verify any new key IDs against official distribution pages
+            - [ ] Confirm no keys were unexpectedly removed
+          branch: 'chore/update-known-keys'
+          commit-message: 'chore: update known distribution keys'
+          labels: 'automated,security'
