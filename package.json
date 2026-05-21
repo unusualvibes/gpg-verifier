@@ -26,6 +26,7 @@
   "author": "GPG Verifier Contributors",
   "license": "MIT",
   "devDependencies": {
+    "openpgp": "^6.3.0",
     "playwright": "^1.40.0"
   },
   "engines": {
