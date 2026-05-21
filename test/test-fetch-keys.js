@@ -93,7 +93,10 @@ async function runTests() {
     globalThis.fetch = async (url) => {
         return {
             ok: true,
-            arrayBuffer: async () => Buffer.from(testKeyArmored).buffer
+            arrayBuffer: async () => {
+                const b = Buffer.from(testKeyArmored);
+                return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+            }
         };
     };
 
@@ -121,7 +124,10 @@ async function runTests() {
         assert(url.includes('TESTFINGERPRINT123'), 'keyserver strategy: includes fingerprint in URL');
         return {
             ok: true,
-            arrayBuffer: async () => Buffer.from(testKeyArmored).buffer
+            arrayBuffer: async () => {
+                const b = Buffer.from(testKeyArmored);
+                return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+            }
         };
     };
 
