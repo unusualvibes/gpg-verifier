@@ -121,7 +121,7 @@ async function runTests() {
     // Test: keyserver strategy success
     globalThis.fetch = async (url) => {
         assert(url.includes('keys.openpgp.org'), 'keyserver strategy: queries keys.openpgp.org');
-        assert(url.includes('TESTFINGERPRINT123'), 'keyserver strategy: includes fingerprint in URL');
+        assert(url.includes('9591F6C004F01D8D48C1CDC02672E6587FB0A5A2'), 'keyserver strategy: includes fingerprint in URL');
         return {
             ok: true,
             arrayBuffer: async () => {
@@ -134,7 +134,7 @@ async function runTests() {
     const keyserverSources = [{
         distro: 'MockKS', label: 'Mock KS Key',
         strategy: 'keyserver', keyserver: 'keys.openpgp.org',
-        fingerprint: 'TEST FINGERPRINT 123'
+        fingerprint: '9591 F6C0 04F0 1D8D 48C1  CDC0 2672 E658 7FB0 A5A2'
     }];
 
     try {
@@ -142,6 +142,31 @@ async function runTests() {
         assert(Object.keys(db).length === 1, 'keyserver strategy: produces one db entry');
     } catch (e) {
         assert(false, 'keyserver strategy: buildDb succeeds', e.message);
+    }
+
+    // Test: configured fingerprints are enforced
+    globalThis.fetch = async () => {
+        return {
+            ok: true,
+            arrayBuffer: async () => {
+                const b = Buffer.from(testKeyArmored);
+                return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+            }
+        };
+    };
+
+    const mismatchSources = [{
+        distro: 'MockMismatch', label: 'Wrong Fingerprint',
+        strategy: 'url', url: 'https://example.com/key.asc',
+        fingerprint: '0000000000000000000000000000000000000000'
+    }];
+
+    try {
+        const { db, summary } = await buildDb(mismatchSources);
+        assert(Object.keys(db).length === 0, 'fingerprint mismatch: entry is skipped');
+        assert(summary[0].error.includes('Fingerprint mismatch'), 'fingerprint mismatch: error recorded in summary');
+    } catch (e) {
+        assert(false, 'fingerprint mismatch: buildDb handles gracefully', e.message);
     }
 
     // Test: fetch failure is skipped, exits non-zero via summary

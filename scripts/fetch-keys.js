@@ -8,8 +8,24 @@ const ROOT = path.join(__dirname, '..');
 const SOURCES_FILE = path.join(__dirname, 'key-sources.json');
 const OUTPUT_FILE = path.join(ROOT, 'known-keys.js');
 
+const FETCH_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 2000;
+
+// Retry only network-level failures (fetch rejections); HTTP error
+// statuses like 404 are deterministic and reported immediately.
+async function fetchWithRetry(url) {
+    for (let attempt = 1; ; attempt++) {
+        try {
+            return await fetch(url);
+        } catch (err) {
+            if (attempt >= FETCH_ATTEMPTS) throw err;
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+        }
+    }
+}
+
 async function fetchUrl(url) {
-    const res = await fetch(url);
+    const res = await fetchWithRetry(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`);
     return Buffer.from(await res.arrayBuffer());
 }
@@ -17,9 +33,23 @@ async function fetchUrl(url) {
 async function fetchKeyserver(keyserver, fingerprint) {
     const fp = fingerprint.replace(/\s/g, '');
     const url = `https://${keyserver}/vks/v1/by-fingerprint/${fp}`;
-    const res = await fetch(url);
+    const res = await fetchWithRetry(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`);
     return Buffer.from(await res.arrayBuffer());
+}
+
+function normalizeFingerprint(fingerprint) {
+    return fingerprint.replace(/\s/g, '').toUpperCase();
+}
+
+function getKeyFingerprints(key) {
+    const fingerprints = [key.getFingerprint().toUpperCase()];
+    if (typeof key.getSubkeys === 'function') {
+        for (const subkey of key.getSubkeys()) {
+            fingerprints.push(subkey.getFingerprint().toUpperCase());
+        }
+    }
+    return fingerprints;
 }
 
 async function buildDb(sources) {
@@ -49,6 +79,9 @@ async function buildDb(sources) {
             for (const key of keys) {
                 const keyID = key.getKeyID().toHex().toLowerCase();
                 const fingerprint = key.getFingerprint().toUpperCase();
+                if (source.fingerprint && !getKeyFingerprints(key).includes(normalizeFingerprint(source.fingerprint))) {
+                    throw new Error(`Fingerprint mismatch: expected ${normalizeFingerprint(source.fingerprint)}, got ${fingerprint}`);
+                }
                 db[keyID] = {
                     distro: source.distro,
                     label: source.label,
@@ -105,4 +138,4 @@ if (require.main === module) {
     main().catch(err => { console.error('Fatal:', err.message); process.exit(1); });
 }
 
-module.exports = { buildDb, writeOutput, fetchUrl, fetchKeyserver };
+module.exports = { buildDb, writeOutput, fetchUrl, fetchKeyserver, normalizeFingerprint, getKeyFingerprints };

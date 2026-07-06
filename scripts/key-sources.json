@@ -58,17 +58,17 @@
   {
     "distro": "Qubes OS",
     "label": "Qubes OS Release 4 Signing Key",
-    "strategy": "keyserver",
-    "keyserver": "keys.openpgp.org",
-    "fingerprint": "9C884DF3F81064A569A4A9FAE022F0FE4A04375D",
+    "strategy": "url",
+    "url": "https://keys.qubes-os.org/keys/qubes-release-4-signing-key.asc",
+    "fingerprint": "5817A43B283DE5A9181A522E1848792F9E2795E9",
     "notes": "Verify at https://www.qubes-os.org/security/verifying-signatures/"
   },
   {
     "distro": "Rocky Linux",
     "label": "Rocky Linux 9 GPG Key",
-    "strategy": "keyserver",
-    "keyserver": "keys.openpgp.org",
-    "fingerprint": "702D426D350D275D50D0BD8DE070AE99F96A1436",
+    "strategy": "url",
+    "url": "https://dl.rockylinux.org/pub/rocky/RPM-GPG-KEY-Rocky-9",
+    "fingerprint": "21CB256AE16FC54C6E652949702D426D350D275D",
     "notes": "Verify at https://rockylinux.org/keys"
   },
   {
