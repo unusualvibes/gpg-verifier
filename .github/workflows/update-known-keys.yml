@@ -25,7 +25,23 @@ jobs:
       - name: Fetch and update known keys
         run: npm run update-keys
 
+      - name: Check for key changes
+        id: diff
+        run: |
+          # Ignore the auto-generated timestamp line so a run that changes
+          # nothing but "// Last updated: ..." doesn't open a pull request.
+          untracked="$(git ls-files --others --exclude-standard)"
+          if git diff --quiet -I '^// Last updated:' && [ -z "$untracked" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No key changes detected — skipping pull request."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git status --porcelain
+            git diff --stat
+          fi
+
       - uses: peter-evans/create-pull-request@v6
+        if: steps.diff.outputs.changed == 'true'
         with:
           title: 'chore: update known distribution keys'
           body: |
